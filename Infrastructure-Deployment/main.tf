@@ -71,7 +71,7 @@ resource "azurerm_network_interface" "main" {
 }
 
 #---------- Create VM
-resource "azurerm_virtual_machine" "webserver" {
+resource "azurerm_virtual_machine" "linuxwebserver" {
   name                  = "${var.prefix}-webserver"
   location              = azurerm_resource_group.servers_rg.location
   resource_group_name   = azurerm_resource_group.servers_rg.name
@@ -92,19 +92,72 @@ resource "azurerm_virtual_machine" "webserver" {
     version   = "latest"
   }
   storage_os_disk {
-    name              = "myosdisk1"
+    name              = "${azurerm_virtual_machine.linuxwebserver.name}-osdisk"
     caching           = "ReadWrite"
     create_option     = "FromImage"
     managed_disk_type = "Standard_LRS"
   }
+  storage_data_disk {
+    name              = "${azurerm_virtual_machine.linuxwebserver.name}-datadisk1"
+    lun               = 0
+    caching           = "ReadOnly"
+    create_option     = "Empty"
+    disk_size_gb      = 128
+    managed_disk_type = "Standard_LRS"
+  }
   os_profile {
-    computer_name  = "hostname"
-    admin_username = "testadmin"
-    admin_password = "Password1234!"
+    computer_name  = "${var.prefix}-LXWEB1"
+    admin_username = "linuxadmin"
+    admin_password = "P@ssw0rd123!"
   }
   os_profile_linux_config {
     disable_password_authentication = false
   }
+  tags = {
+    environment = var.prod
+    source      = var.sourcedeployment
+  }
+}
+
+resource "azurerm_virtual_machine" "winserver" {
+  name                  = "${var.prefix}-winserver"
+  location              = azurerm_resource_group.servers_rg.location
+  resource_group_name   = azurerm_resource_group.servers_rg.name
+  network_interface_ids = [azurerm_network_interface.main.id]
+  vm_size               = "Standard_B2ms"
+
+  storage_image_reference {
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2022-datacenter"
+    version   = "latest"
+  }
+
+  storage_os_disk {
+    name              = "${azurerm_virtual_machine.winserver.name}-osdisk"
+    caching           = "ReadWrite"
+    create_option     = "FromImage"
+    managed_disk_type = "Premium_LRS"
+  }
+  storage_data_disk {
+    name              = "${azurerm_virtual_machine.winserver.name}-datadisk1"
+    lun               = 0
+    caching           = "ReadOnly"
+    create_option     = "Empty"
+    disk_size_gb      = 128
+    managed_disk_type = "Premium_LRS"
+  }
+  os_profile {
+    computer_name  = "${var.prefix}-DC1"
+    admin_username = "winadmin"
+    admin_password = "P@ssw0rd123!"
+  }
+
+  os_profile_windows_config {
+    provision_vm_agent        = true
+    enable_automatic_upgrades = true
+  }
+
   tags = {
     environment = var.prod
     source      = var.sourcedeployment
