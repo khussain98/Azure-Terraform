@@ -107,8 +107,8 @@ resource "azurerm_virtual_machine" "linuxwebserver" {
   }
   os_profile {
     computer_name  = "${var.prefix}-LXWEB1"
-    admin_username = "linuxadmin"
-    admin_password = "P@ssw0rd123!"
+    admin_username = var.default_linux_creds.username
+    admin_password = var.default_linux_creds.password
   }
   os_profile_linux_config {
     disable_password_authentication = false
@@ -149,8 +149,8 @@ resource "azurerm_virtual_machine" "winserver" {
   }
   os_profile {
     computer_name  = "${var.prefix}-DC1"
-    admin_username = "winadmin"
-    admin_password = "P@ssw0rd123!"
+    admin_username = var.default_win_creds.username
+    admin_password = var.default_win_creds.password
   }
 
   os_profile_windows_config {
