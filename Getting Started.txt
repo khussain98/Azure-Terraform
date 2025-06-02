@@ -3,7 +3,7 @@ Edit System Environment Variables and add to System Environment Variables
 Path -> New -> Paste Terraform Path.
 
 You can now use commands, i.e. 
-Terrmaform Version
+terraform version
 
 # Install Az CLI - https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&pivots=winget
 winget install --exact --id Microsoft.AzureCLI
