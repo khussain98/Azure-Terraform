@@ -28,6 +28,36 @@ variable "location1" {
 }
 
 #--Strings
+variable "test" {
+  type    = string
+  default = ""
+}
+
+variable "default_linux_creds" {
+  description = "Default admin credentials for Linux VMs"
+  type = object({
+    username = string
+    password = string
+  })
+  default = {
+    username = "linuxadmin"
+    password = "P@ssw0rd123!"
+  }
+}
+
+variable "default_win_creds" {
+  description = "Default admin credentials for Windows VMs"
+  type = object({
+    username = string
+    password = string
+  })
+  default = {
+    username = "winadmin"
+    password = "P@ssw0rd123!"
+  }
+}
+
+
 variable "prod" {
   type        = string
   default     = "prod"
