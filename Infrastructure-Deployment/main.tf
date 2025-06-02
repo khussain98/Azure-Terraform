@@ -111,13 +111,13 @@ resource "azurerm_virtual_machine" "linuxwebserver" {
     version   = "latest"
   }
   storage_os_disk {
-    name              = "${azurerm_virtual_machine.linuxwebserver.name}-osdisk"
+    name              = "${var.prefix}webserver-osdisk"
     caching           = "ReadWrite"
     create_option     = "FromImage"
     managed_disk_type = "Standard_LRS"
   }
   storage_data_disk {
-    name              = "${azurerm_virtual_machine.linuxwebserver.name}-datadisk1"
+    name              = "${var.prefix}webserver-datadisk1"
     lun               = 0
     caching           = "ReadOnly"
     create_option     = "Empty"
@@ -154,13 +154,13 @@ resource "azurerm_virtual_machine" "winserver" {
   }
 
   storage_os_disk {
-    name              = "${azurerm_virtual_machine.winserver.name}-osdisk"
+    name              = "${var.prefix}winserver-osdisk"
     caching           = "ReadWrite"
     create_option     = "FromImage"
     managed_disk_type = "Premium_LRS"
   }
   storage_data_disk {
-    name              = "${azurerm_virtual_machine.winserver.name}-datadisk1"
+    name              = "${var.prefix}winserver-datadisk1"
     lun               = 0
     caching           = "ReadOnly"
     create_option     = "Empty"
