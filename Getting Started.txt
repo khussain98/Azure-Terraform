@@ -1,3 +1,21 @@
 #Install Terraform - https://developer.hashicorp.com/terraform/install
+Edit System Environment Variables and add to System Environment Variables
+Path -> New -> Paste Terraform Path.
+
+You can now use commands, i.e. 
+Terrmaform Version
+
 #Install Az CLI - https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&pivots=winget
 winget install --exact --id Microsoft.AzureCLI
+
+You can now use commands, i.e.
+Az Version
+
+#Visual Studio Code with Terraform - https://code.visualstudio.com/ / https://visualstudio.microsoft.com/downloads/
+Install Extension:
+-HashiCorp Terraform
+-Azure Terraform
+-AWS Terraform
+
+Open Explorer, choose Terraform folder.
+Create main.tf
