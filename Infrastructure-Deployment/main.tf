@@ -94,7 +94,7 @@ resource "azurerm_virtual_machine" "linuxwebserver" {
   name                  = "${var.prefix}-webserver"
   location              = azurerm_resource_group.servers_rg.location
   resource_group_name   = azurerm_resource_group.servers_rg.name
-  network_interface_ids = [azurerm_network_interface.main.id]
+  network_interface_ids = [azurerm_network_interface.webserver.id]
   #  vm_size               = "Standard_DS1_v2"
   vm_size = "Standard_B2ms"
 
@@ -143,7 +143,7 @@ resource "azurerm_virtual_machine" "winserver" {
   name                  = "${var.prefix}-winserver"
   location              = azurerm_resource_group.servers_rg.location
   resource_group_name   = azurerm_resource_group.servers_rg.name
-  network_interface_ids = [azurerm_network_interface.main.id]
+  network_interface_ids = [azurerm_network_interface.winserver.id]
   vm_size               = "Standard_B2ms"
 
   storage_image_reference {
