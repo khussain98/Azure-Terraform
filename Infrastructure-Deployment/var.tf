@@ -8,16 +8,16 @@ variable "prefix" {
 variable "addressprefix" {
   description = "Address Spaces for Azure"
   type = object({
-    default = string
-    azuuresubnet1 = string
-    serversubnet1 = string
-    websubnet1 = string
+    default       = list(string)
+    azuresubnet1  = list(string)
+    serversubnet1 = list(string)
+    websubnet1    = list(string)
   })
   default = {
-    default = ["192.168.0.0/16"]
-    azuresubnet1 = ["192.168.20.0/24"]
+    default       = ["192.168.0.0/16"]
+    azuresubnet1  = ["192.168.20.0/24"]
     serversubnet1 = ["192.168.30.0/24"]
-    websubnet1 = ["192.168.40.0/24"]
+    websubnet1    = ["192.168.40.0/24"]
   }
 }
 
