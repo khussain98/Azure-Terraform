@@ -44,28 +44,47 @@ resource "azurerm_resource_group" "servers_avd_rg" {
 #---------- Create vNet
 resource "azurerm_virtual_network" "main" {
   name                = "${var.prefix}-vNET"
-  address_space       = var.addressprefix
+  address_space       = var.addressprefix.default
   location            = azurerm_resource_group.vnet_rg.location
   resource_group_name = azurerm_resource_group.vnet_rg.name
 }
 
 #---------- Create Subnet
-resource "azurerm_subnet" "subnet" {
-  name                 = "${var.prefix}-AzureSubnet"
+resource "azurerm_subnet" "web_subnet" {
+  name                 = "${var.prefix}-WebSubnet"
   resource_group_name  = azurerm_resource_group.vnet_rg.name
   virtual_network_name = azurerm_virtual_network.main.name
-  address_prefixes     = var.addressprefixazure
+  address_prefixes     = var.addressprefix.websubnet1
+}
+
+resource "azurerm_subnet" "server_subnet" {
+  name                 = "${var.prefix}-ServerSubnet"
+  resource_group_name  = azurerm_resource_group.vnet_rg.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = var.addressprefix.serversubnet1
 }
 
 #---------- Create NIC
-resource "azurerm_network_interface" "main" {
+resource "azurerm_network_interface" "webserver" {
   name                = "${var.prefix}-webserver-nic1"
   location            = azurerm_resource_group.servers_rg.location
   resource_group_name = azurerm_resource_group.servers_rg.name
 
   ip_configuration {
     name                          = "webserver-ip1"
-    subnet_id                     = azurerm_subnet.subnet.id
+    subnet_id                     = azurerm_subnet.web_subnet.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+
+resource "azurerm_network_interface" "winserver" {
+  name                = "${var.prefix}-winserver-nic1"
+  location            = azurerm_resource_group.servers_rg.location
+  resource_group_name = azurerm_resource_group.servers_rg.name
+
+  ip_configuration {
+    name                          = "winserver-ip1"
+    subnet_id                     = azurerm_subnet.server_subnet.id
     private_ip_address_allocation = "Dynamic"
   }
 }
@@ -119,6 +138,7 @@ resource "azurerm_virtual_machine" "linuxwebserver" {
   }
 }
 
+# --- Full steam ahead with Windows Deployment!!!
 resource "azurerm_virtual_machine" "winserver" {
   name                  = "${var.prefix}-winserver"
   location              = azurerm_resource_group.servers_rg.location
