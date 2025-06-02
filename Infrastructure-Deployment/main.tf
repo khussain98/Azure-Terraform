@@ -59,19 +59,20 @@ resource "azurerm_subnet" "subnet" {
 
 #---------- Create NIC
 resource "azurerm_network_interface" "main" {
-  name                = "${var.prefix}-nic"
+  name                = "${var.prefix}-webserver-nic1"
   location            = azurerm_resource_group.servers_rg.location
   resource_group_name = azurerm_resource_group.servers_rg.name
 
   ip_configuration {
-    name                          = "testconfiguration1"
+    name                          = "webserver-ip1"
     subnet_id                     = azurerm_subnet.subnet.id
     private_ip_address_allocation = "Dynamic"
   }
 }
 
-resource "azurerm_virtual_machine" "main" {
-  name                  = "${var.prefix}-vm"
+#---------- Create VM
+resource "azurerm_virtual_machine" "webserver" {
+  name                  = "${var.prefix}-webserver"
   location              = azurerm_resource_group.servers_rg.location
   resource_group_name   = azurerm_resource_group.servers_rg.name
   network_interface_ids = [azurerm_network_interface.main.id]
