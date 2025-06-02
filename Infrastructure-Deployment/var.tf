@@ -6,19 +6,19 @@ variable "prefix" {
 
 # vNet Subnet Space
 variable "addressprefix" {
-  type    = list(string)
-  default = ["192.168.0.0/16"]
-}
-
-# Azure Internal Subnet
-variable "addressprefixazure" {
-  type    = list(string)
-  default = ["192.168.2.0/24"]
-}
-
-variable "name" {
-  type    = string
-  default = "createdusingtf"
+  description = "Address Spaces for Azure"
+  type = object({
+    default = string
+    azuuresubnet1 = string
+    serversubnet1 = string
+    websubnet1 = string
+  })
+  default = {
+    default = ["192.168.0.0/16"]
+    azuresubnet1 = ["192.168.20.0/24"]
+    serversubnet1 = ["192.168.30.0/24"]
+    websubnet1 = ["192.168.40.0/24"]
+  }
 }
 
 # UK South Location
