@@ -8,7 +8,7 @@
 # ------------------------------------------------------------
 locals {
   # Pull the registration token from the host pool registration info resource
-  #registration_token = azurerm_virtual_desktop_host_pool_registration_info.registrationinfo.token
+  registration_token = azurerm_virtual_desktop_host_pool_registration_info.registrationinfo.token
 }
 
 # ------------------------------------------------------------
@@ -70,6 +70,11 @@ resource "azurerm_network_interface" "DC01" {
     private_ip_address_allocation = "Static" # Use "Static" instead of "Dynamic"
     private_ip_address            = "192.168.10.10"
   }
+  
+  tags = {
+    environment = var.prod
+    source      = var.sourcedeployment
+  }
 }
 
 resource "azurerm_virtual_machine" "DC01" {
@@ -109,7 +114,6 @@ resource "azurerm_virtual_machine" "DC01" {
   }
 }
 
-/**
 # ------------------------------------------------------------
 # 5) AVD Host Pool
 # ------------------------------------------------------------
@@ -344,7 +348,6 @@ resource "azuread_group" "avd_users" {
   display_name     = "AVDUsers"
   security_enabled = true
 }
-**/
 
 # ------------------------------------------------------------
 # 16) Role Definitions & Assignments

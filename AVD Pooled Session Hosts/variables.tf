@@ -51,7 +51,7 @@ variable "domain_name" {
 }
 
 variable "domain_user_upn" {
-  default = "administrator"
+  default = "localadm"
 }
 
 variable "domain_password" {
@@ -60,7 +60,7 @@ variable "domain_password" {
 }
 
 variable "ou_path" {
-  default = "OU=Citrix Desktops,OU=Servers,OU=Computers,OU=AE,DC=SOLUTIONS,DC=COM"
+  default = "OU=AVD-Desktops,OU=Servers,OU=khlab,DC=ad,DC=khlab,DC=com"
 }
 
 #-- Other Variables
