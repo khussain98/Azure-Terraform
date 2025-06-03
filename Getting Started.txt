@@ -22,3 +22,11 @@ Create main.tf
 Create var.tf
 
 # Resources: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_machine
+Other useful resources:
+https://learn.microsoft.com/en-us/azure/virtual-machines/windows/cli-ps-findimage
+
+https://az-vm-image.info/
+
+https://deepnote.com/app/nuts/AzVM-Image-List-7c888fd9-5bc0-4817-a619-5e687631bdab
+az vm image list --all --output table --publisher MicrosoftWindowsDesktop
+
