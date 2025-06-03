@@ -59,13 +59,18 @@ variable "domain_password" {
   sensitive = true
 }
 
+variable "dsrp_password" {
+  default   = "ChangeMe123!"
+  sensitive = true
+}
+
 variable "ou_path" {
   default = "OU=AVD-Desktops,OU=Servers,OU=khlab,DC=ad,DC=khlab,DC=com"
 }
 
 #-- Other Variables
 variable "registration_expiration" {
-  default     = "2025-12-31T23:59:59Z"
+  default     = "2025-06-28T23:59:59Z"
   description = "Host pool registration token expiry in RFC3339 format"
 }
 

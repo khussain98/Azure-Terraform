@@ -125,7 +125,7 @@ resource "azurerm_network_interface" "DC01" {
 
   # Point the DC’s DNS to itself so it can host your AD DNS zone.
   dns_servers = [
-    "192.168.10.10"
+    "127.0.0.1"
   ]
 
   ip_configuration {
@@ -185,6 +185,41 @@ resource "azurerm_virtual_machine" "DC01" {
   }
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_machine 
+
+# 7.4) Custom Script Extension: Install AD DS + Create new forest "ad.khlab.com"
+#
+# This runs a one-liner PowerShell that:
+#   1) Installs the AD-Domain-Services feature
+#   2) Promotes DC01 into a brand-new forest called ad.khlab.com
+#      (with NetBIOS name "ADKHLAB" and DNS enabled)
+#
+# Variables needed:
+#   - var.dsrp_password: the SafeMode (DSRM) password for the new forest
+#
+# References:
+#   - Custom Script Extension docs: https://learn.microsoft.com/azure/virtual-machines/extensions/custom-script-windows 
+#   - Install-ADDSForest cmdlet:    https://learn.microsoft.com/powershell/module/activedirectory/install-addsforest 
+resource "azurerm_virtual_machine_extension" "dc_customscript" {
+  name                       = "${var.prefix}-DC01-CustomScript"
+  virtual_machine_id         = azurerm_virtual_machine.DC01.id
+  publisher                  = "Microsoft.Compute"
+  type                       = "CustomScriptExtension"
+  type_handler_version       = "1.10"
+  auto_upgrade_minor_version = true
+
+  settings = <<-SETTINGS
+    {
+      "commandToExecute": "powershell -ExecutionPolicy Unrestricted -NoProfile -Command Install-WindowsFeature AD-Domain-Services; Install-ADDSForest -DomainName 'ad.khlab.com' -SafeModeAdministratorPassword (ConvertTo-SecureString '${var.dsrp_password}' -AsPlainText -Force) -DomainNetbiosName 'ADKHLAB' -InstallDns -Force:$true -NoRebootOnCompletion"
+    }
+  SETTINGS
+
+  protected_settings = <<-PROTECTED
+    {
+      "storageAccountName": null,
+      "storageAccountKey": null
+    }
+  PROTECTED
+}
 
 # ------------------------------------------------------------
 # 8) AVD Host Pool
@@ -282,39 +317,67 @@ resource "azurerm_storage_share" "msix" {
 # 14) Azure AD Groups for AVD Admins & Users
 # ------------------------------------------------------------
 resource "azuread_group" "avd_admins" {
-  display_name     = "AVDAdmin"
+  display_name     = "AVD Admins"
   security_enabled = true
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/group 
 
 resource "azuread_group" "avd_users" {
-  display_name     = "AVDUsers"
+  display_name     = "AVD Users"
   security_enabled = true
 }
 
 # ------------------------------------------------------------
-# 15) (Optional) Role Definitions & Assignments
+# 14b) Grant AVDUsers the “Storage File Data SMB Share Contributor” role
+#       on the storage account (so they can mount fslogix/msix shares).
 # ------------------------------------------------------------
-# data "azurerm_role_definition" "desktop_virtualization_user" {
-#   name = "Desktop Virtualization User"
-# }
-# 
-# resource "azurerm_role_assignment" "avd_users_assignment" {
-#   scope              = azurerm_virtual_desktop_application_group.dag.id
-#   role_definition_id = data.azurerm_role_definition.desktop_virtualization_user.id
-#   principal_id       = azuread_group.avd_users.id
-# }
-# 
-# data "azurerm_role_definition" "desktop_virtualization_admin" {
-#   name = "Desktop Virtualization Administrator"
-# }
-# 
-# resource "azurerm_role_assignment" "avd_admins_assignment" {
-#   scope              = azurerm_virtual_desktop_host_pool.hostpool.id
-#   role_definition_id = data.azurerm_role_definition.desktop_virtualization_admin.id
-#   principal_id       = azuread_group.avd_admins.id
-# }
 
+# 1) Look up the built-in “Storage File Data SMB Share Contributor” role at the storage-account scope
+data "azurerm_role_definition" "storage_file_smb_contributor" {
+  name  = "Storage File Data SMB Share Contributor"
+  scope = azurerm_storage_account.avd_storage.id
+}
+
+# 2) Assign that role to your AVDUsers group on the storage-account
+resource "azurerm_role_assignment" "fslogix_users_on_storage" {
+  scope              = azurerm_storage_account.avd_storage.id
+  role_definition_id = data.azurerm_role_definition.storage_file_smb_contributor.id
+  principal_id       = azuread_group.avd_users.id
+}
+
+# ------------------------------------------------------------
+# 15) Role Definitions & Assignments
+# ------------------------------------------------------------
+/**
+# 15.1) Capture the current subscription ID via az login context
+data "azurerm_subscription" "current" {}
+
+# 15.2) Find the built-in "Desktop Virtualization User" role
+data "azurerm_role_definition" "desktop_virtualization_user" {
+  name  = "Desktop Virtualization User"
+  scope = data.azurerm_subscription.current.id
+}
+
+# 15.3) Find the built-in "Desktop Virtualization Administrator" role
+data "azurerm_role_definition" "desktop_virtualization_admin" {
+  name  = "Desktop Virtualization Administrator"
+  scope = data.azurerm_subscription.current.id
+}
+
+# 15.4) Assign Desktop Virtualization User to the AVDUsers group at the App Group
+resource "azurerm_role_assignment" "avd_users_assignment" {
+  scope              = azurerm_virtual_desktop_application_group.dag.id
+  role_definition_id = data.azurerm_role_definition.desktop_virtualization_user.id
+  principal_id       = azuread_group.avd_users.id
+}
+
+# 15.5) Assign Desktop Virtualization Administrator to the AVDAdmins group at the Host Pool
+resource "azurerm_role_assignment" "avd_admins_assignment" {
+  scope              = azurerm_virtual_desktop_host_pool.hostpool.id
+  role_definition_id = data.azurerm_role_definition.desktop_virtualization_admin.id
+  principal_id       = azuread_group.avd_admins.id
+}
+**/
 # ------------------------------------------------------------
 # 16) Network Interfaces for Session Hosts
 # ------------------------------------------------------------
@@ -362,7 +425,7 @@ resource "azurerm_windows_virtual_machine" "avd_vm" {
   source_image_reference {
     publisher = "MicrosoftWindowsDesktop"
     offer     = "windows-11"
-    sku       = "win11-21h2-avd"
+    sku       = "win11-24h2-avd-m365"
     version   = "latest"
   }
 
