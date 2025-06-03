@@ -17,3 +17,9 @@ output "vnetrange" {
   description = "Address range for deployment vnet"
   value       = azurerm_virtual_network.vnet.address_space
 }
+/**
+output "dsrm" {
+  description = "Output generated DSRM/DSRP"
+  value       = "DSRM: ${var.dsrp_password}"
+}
+**/

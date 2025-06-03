@@ -4,14 +4,6 @@
 # (Defined in providers.tf)
 
 # ------------------------------------------------------------
-# 2) Locals
-# ------------------------------------------------------------
-locals {
-  # Grab the AVD host pool registration token
-  registration_token = azurerm_virtual_desktop_host_pool_registration_info.registrationinfo.token
-}
-
-# ------------------------------------------------------------
 # 3) Resource Groups
 # ------------------------------------------------------------
 resource "azurerm_resource_group" "rg_vnet" {
@@ -66,7 +58,7 @@ resource "azurerm_network_security_group" "avd_nsg" {
     source_port_range          = "*"
     destination_port_ranges    = ["389", "636", "445"]
     source_address_prefix      = azurerm_subnet.subnet.address_prefixes[0]
-    destination_address_prefix = "192.168.10.10"   # DC’s static IP
+    destination_address_prefix = "192.168.10.10" # DC’s static IP
   }
 
   # Allow AVD gateway flow (RDP) via AzureLoadBalancer
@@ -118,6 +110,14 @@ resource "azurerm_network_security_group" "dc_nsg" {
 # ------------------------------------------------------------
 # 7) Deploy Base Windows Server for DC Creation
 # ------------------------------------------------------------
+resource "azurerm_public_ip" "dc_pip" {
+  name                = "${var.prefix}-DC01-pip1"
+  location            = azurerm_resource_group.rg_servers.location
+  resource_group_name = azurerm_resource_group.rg_servers.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
 resource "azurerm_network_interface" "DC01" {
   name                = "${var.prefix}-DC01-nic1"
   location            = azurerm_resource_group.rg_servers.location
@@ -125,7 +125,7 @@ resource "azurerm_network_interface" "DC01" {
 
   # Point the DC’s DNS to itself so it can host your AD DNS zone.
   dns_servers = [
-    "127.0.0.1"
+    "8.8.8.8"
   ]
 
   ip_configuration {
@@ -133,6 +133,7 @@ resource "azurerm_network_interface" "DC01" {
     subnet_id                     = azurerm_subnet.subnet.id
     private_ip_address_allocation = "Static"
     private_ip_address            = "192.168.10.10"
+    public_ip_address_id          = azurerm_public_ip.dc_pip.id
   }
 
   tags = {
@@ -209,7 +210,7 @@ resource "azurerm_virtual_machine_extension" "dc_customscript" {
 
   settings = <<-SETTINGS
     {
-      "commandToExecute": "powershell -ExecutionPolicy Unrestricted -NoProfile -Command Install-WindowsFeature AD-Domain-Services; Install-ADDSForest -DomainName 'ad.khlab.com' -SafeModeAdministratorPassword (ConvertTo-SecureString '${var.dsrp_password}' -AsPlainText -Force) -DomainNetbiosName 'ADKHLAB' -InstallDns -Force:$true -NoRebootOnCompletion"
+      "commandToExecute": "powershell -ExecutionPolicy Unrestricted -NoProfile -Command Install-WindowsFeature AD-Domain-Services; Install-WindowsFeature RSAT-AD-Tools; Install-ADDSForest -DomainName 'ad.khlab.com' -SafeModeAdministratorPassword (ConvertTo-SecureString '${var.dsrp_password}' -AsPlainText -Force) -DomainNetbiosName 'ADKHLAB' -InstallDns -Force:$true -NoRebootOnCompletion"
     }
   SETTINGS
 
@@ -222,72 +223,7 @@ resource "azurerm_virtual_machine_extension" "dc_customscript" {
 }
 
 # ------------------------------------------------------------
-# 8) AVD Host Pool
-# ------------------------------------------------------------
-resource "azurerm_virtual_desktop_host_pool" "hostpool" {
-  name                 = "${var.prefix}-hostpool"
-  location             = azurerm_resource_group.rg.location
-  resource_group_name  = azurerm_resource_group.rg.name
-  type                 = "Pooled"       # or "Personal"
-  load_balancer_type   = "BreadthFirst" # “BreadthFirst”, “DepthFirst”, or “Persistent”
-  friendly_name        = "${var.prefix} Host Pool"
-  validate_environment = true
-}
-# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_host_pool 
-
-# ------------------------------------------------------------
-# 9) AVD Application Group
-# ------------------------------------------------------------
-resource "azurerm_virtual_desktop_application_group" "dag" {
-  name                = "${var.prefix}-dag"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  host_pool_id        = azurerm_virtual_desktop_host_pool.hostpool.id
-  type                = "Desktop" # or "RemoteApp"
-  friendly_name       = "${var.prefix} Application Group"
-}
-# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_application_group 
-
-# ------------------------------------------------------------
-# 10) AVD Workspace & Association
-# ------------------------------------------------------------
-resource "azurerm_virtual_desktop_workspace" "workspace" {
-  name                = "${var.prefix}-workspace"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  friendly_name       = "${var.prefix} Workspace"
-}
-# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_workspace 
-
-resource "azurerm_virtual_desktop_workspace_application_group_association" "association" {
-  workspace_id         = azurerm_virtual_desktop_workspace.workspace.id
-  application_group_id = azurerm_virtual_desktop_application_group.dag.id
-}
-# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_workspace_application_group_association 
-
-# ------------------------------------------------------------
-# 11) Host Pool Registration Info (token for DSC)
-# ------------------------------------------------------------
-resource "azurerm_virtual_desktop_host_pool_registration_info" "registrationinfo" {
-  hostpool_id     = azurerm_virtual_desktop_host_pool.hostpool.id
-  expiration_date = var.registration_expiration   # e.g. "2025-12-01T00:00:00Z"
-}
-# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_host_pool_registration_info 
-
-# ------------------------------------------------------------
-# 12) Random String for AVD session host local passwords
-# ------------------------------------------------------------
-resource "random_string" "AVD_local_password" {
-  count            = var.rdsh_count
-  length           = 16
-  special          = true
-  min_special      = 2
-  override_special = "*!@#?"
-}
-# Docs: https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string 
-
-# ------------------------------------------------------------
-# 13) Storage Account + File Shares for FSLogix / MSIX
+# 8) Storage Account + File Shares for FSLogix / MSIX
 # ------------------------------------------------------------
 resource "azurerm_storage_account" "avd_storage" {
   name                      = "${lower(replace(var.prefix, "-", ""))}storage" # 3–24 chars, lowercase alphanumeric 
@@ -297,24 +233,29 @@ resource "azurerm_storage_account" "avd_storage" {
   account_replication_type  = "LRS"
   account_kind              = "FileStorage"
   enable_https_traffic_only = true
+
+  tags = {
+    environment = var.prod
+    source      = var.sourcedeployment
+  }
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account 
 
 resource "azurerm_storage_share" "fslogix" {
   name                 = "fslogix"
   storage_account_name = azurerm_storage_account.avd_storage.name
-  quota                = 1024
+  quota                = 1
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_share 
 
 resource "azurerm_storage_share" "msix" {
   name                 = "msix"
   storage_account_name = azurerm_storage_account.avd_storage.name
-  quota                = 1024
+  quota                = 1
 }
 
 # ------------------------------------------------------------
-# 14) Azure AD Groups for AVD Admins & Users
+# 9) Azure AD Groups for AVD Admins & Users
 # ------------------------------------------------------------
 resource "azuread_group" "avd_admins" {
   display_name     = "AVD Admins"
@@ -328,7 +269,7 @@ resource "azuread_group" "avd_users" {
 }
 
 # ------------------------------------------------------------
-# 14b) Grant AVDUsers the “Storage File Data SMB Share Contributor” role
+# 9b) Grant AVDUsers the “Storage File Data SMB Share Contributor” role
 #       on the storage account (so they can mount fslogix/msix shares).
 # ------------------------------------------------------------
 
@@ -346,38 +287,112 @@ resource "azurerm_role_assignment" "fslogix_users_on_storage" {
 }
 
 # ------------------------------------------------------------
-# 15) Role Definitions & Assignments
+# 10) Role Definitions & Assignments
 # ------------------------------------------------------------
 /**
-# 15.1) Capture the current subscription ID via az login context
+# 10.1) Capture the current subscription ID via az login context
 data "azurerm_subscription" "current" {}
 
-# 15.2) Find the built-in "Desktop Virtualization User" role
+# 10.2) Find the built-in "Desktop Virtualization User" role
 data "azurerm_role_definition" "desktop_virtualization_user" {
   name  = "Desktop Virtualization User"
   scope = data.azurerm_subscription.current.id
 }
 
-# 15.3) Find the built-in "Desktop Virtualization Administrator" role
+# 10.3) Find the built-in "Desktop Virtualization Administrator" role
 data "azurerm_role_definition" "desktop_virtualization_admin" {
   name  = "Desktop Virtualization Administrator"
   scope = data.azurerm_subscription.current.id
 }
 
-# 15.4) Assign Desktop Virtualization User to the AVDUsers group at the App Group
+# 10.4) Assign Desktop Virtualization User to the AVDUsers group at the App Group
 resource "azurerm_role_assignment" "avd_users_assignment" {
   scope              = azurerm_virtual_desktop_application_group.dag.id
   role_definition_id = data.azurerm_role_definition.desktop_virtualization_user.id
   principal_id       = azuread_group.avd_users.id
 }
 
-# 15.5) Assign Desktop Virtualization Administrator to the AVDAdmins group at the Host Pool
+# 10.5) Assign Desktop Virtualization Administrator to the AVDAdmins group at the Host Pool
 resource "azurerm_role_assignment" "avd_admins_assignment" {
   scope              = azurerm_virtual_desktop_host_pool.hostpool.id
   role_definition_id = data.azurerm_role_definition.desktop_virtualization_admin.id
   principal_id       = azuread_group.avd_admins.id
 }
 **/
+
+# ------------------------------------------------------------
+# 2) Locals
+# ------------------------------------------------------------
+locals {
+  # Grab the AVD host pool registration token
+  registration_token = azurerm_virtual_desktop_host_pool_registration_info.registrationinfo.token
+}
+
+# ------------------------------------------------------------
+# 11) AVD Host Pool
+# ------------------------------------------------------------
+resource "azurerm_virtual_desktop_host_pool" "hostpool" {
+  name                 = "${var.prefix}-hostpool"
+  location             = azurerm_resource_group.rg.location
+  resource_group_name  = azurerm_resource_group.rg.name
+  type                 = "Pooled"       # or "Personal"
+  load_balancer_type   = "BreadthFirst" # “BreadthFirst”, “DepthFirst”, or “Persistent”
+  friendly_name        = "${var.prefix} Host Pool"
+  validate_environment = true
+}
+# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_host_pool 
+
+# ------------------------------------------------------------
+# 12) AVD Application Group
+# ------------------------------------------------------------
+resource "azurerm_virtual_desktop_application_group" "dag" {
+  name                = "${var.prefix}-dag"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  host_pool_id        = azurerm_virtual_desktop_host_pool.hostpool.id
+  type                = "Desktop" # or "RemoteApp"
+  friendly_name       = "${var.prefix} Application Group"
+}
+# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_application_group 
+
+# ------------------------------------------------------------
+# 13) AVD Workspace & Association
+# ------------------------------------------------------------
+resource "azurerm_virtual_desktop_workspace" "workspace" {
+  name                = "${var.prefix}-workspace"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  friendly_name       = "${var.prefix} Workspace"
+}
+# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_workspace 
+
+resource "azurerm_virtual_desktop_workspace_application_group_association" "association" {
+  workspace_id         = azurerm_virtual_desktop_workspace.workspace.id
+  application_group_id = azurerm_virtual_desktop_application_group.dag.id
+}
+# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_workspace_application_group_association 
+
+# ------------------------------------------------------------
+# 14) Host Pool Registration Info (token for DSC)
+# ------------------------------------------------------------
+resource "azurerm_virtual_desktop_host_pool_registration_info" "registrationinfo" {
+  hostpool_id     = azurerm_virtual_desktop_host_pool.hostpool.id
+  expiration_date = var.registration_expiration # e.g. "2025-12-01T00:00:00Z"
+}
+# Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_host_pool_registration_info 
+
+# ------------------------------------------------------------
+# 15) Random String for AVD session host local passwords
+# ------------------------------------------------------------
+resource "random_string" "AVD_local_password" {
+  count            = var.rdsh_count
+  length           = 16
+  special          = true
+  min_special      = 2
+  override_special = "*!@#?"
+}
+# Docs: https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string 
+
 # ------------------------------------------------------------
 # 16) Network Interfaces for Session Hosts
 # ------------------------------------------------------------
@@ -425,7 +440,7 @@ resource "azurerm_windows_virtual_machine" "avd_vm" {
   source_image_reference {
     publisher = "MicrosoftWindowsDesktop"
     offer     = "windows-11"
-    sku       = "win11-24h2-avd-m365"
+    sku       = "win11-24h2-avd"
     version   = "latest"
   }
 

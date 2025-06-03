@@ -30,7 +30,7 @@ variable "rdsh_count" {
 }
 
 variable "vm_size" {
-  default     = "Standard_B2ms"
+  default     = "Standard_B4ms"
   description = "VM size"
 }
 
@@ -65,7 +65,7 @@ variable "dsrp_password" {
 }
 
 variable "ou_path" {
-  default = "OU=AVD-Desktops,OU=Servers,OU=khlab,DC=ad,DC=khlab,DC=com"
+  default = "OU=AVD Desktops,OU=Servers,OU=khlab,DC=ad,DC=khlab,DC=com"
 }
 
 #-- Other Variables
