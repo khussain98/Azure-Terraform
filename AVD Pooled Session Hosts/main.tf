@@ -8,12 +8,22 @@
 # ------------------------------------------------------------
 locals {
   # Pull the registration token from the host pool registration info resource
-  registration_token = azurerm_virtual_desktop_host_pool_registration_info.registrationinfo.token
+  #registration_token = azurerm_virtual_desktop_host_pool_registration_info.registrationinfo.token
 }
 
 # ------------------------------------------------------------
 # 3) Resource Group
 # ------------------------------------------------------------
+resource "azurerm_resource_group" "rg_vnet" {
+  name     = var.rg_vnet
+  location = var.resource_group_location
+}
+
+resource "azurerm_resource_group" "rg_servers" {
+  name     = var.rg_servers
+  location = var.resource_group_location
+}
+
 resource "azurerm_resource_group" "rg" {
   name     = var.rg
   location = var.resource_group_location
@@ -26,19 +36,80 @@ resource "azurerm_resource_group" "rg" {
 resource "azurerm_virtual_network" "vnet" {
   name                = "${var.prefix}-vnet"
   address_space       = ["192.168.0.0/16"]
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg_vnet.location
+  resource_group_name = azurerm_resource_group.rg_vnet.name
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network
 
 resource "azurerm_subnet" "subnet" {
   name                 = "${var.prefix}-subnet"
-  resource_group_name  = azurerm_resource_group.rg.name
+  resource_group_name  = azurerm_resource_group.rg_vnet.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["192.168.10.0/24"]
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet
 
+# ------------------------------------------------------------
+# Deploy Base Win Server for DC Creation
+# ------------------------------------------------------------
+resource "azurerm_network_interface" "DC01" {
+  name                = "${var.prefix}-DC01-nic1"
+  location            = azurerm_resource_group.rg_servers.location
+  resource_group_name = azurerm_resource_group.rg_servers.name
+
+  # Set your preferred DNS servers here
+  dns_servers = [
+    "8.8.8.8",
+    "8.8.4.4"
+  ]
+
+  ip_configuration {
+    name                          = "DC01-ip1"
+    subnet_id                     = azurerm_subnet.subnet.id
+    #private_ip_address_allocation = "Dynamic"
+    private_ip_address_allocation = "Static" # Use "Static" instead of "Dynamic"
+    private_ip_address            = "192.168.10.10"
+  }
+}
+
+resource "azurerm_virtual_machine" "DC01" {
+  name                  = "${var.prefix}-DC01"
+  location              = azurerm_resource_group.rg_servers.location
+  resource_group_name   = azurerm_resource_group.rg_servers.name
+  network_interface_ids = [azurerm_network_interface.DC01.id]
+  vm_size               = var.vm_size
+
+  storage_image_reference {
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2022-datacenter"
+    version   = "latest"
+  }
+
+  storage_os_disk {
+    name              = "${var.prefix}-DC01-osdisk"
+    caching           = "ReadWrite"
+    create_option     = "FromImage"
+    managed_disk_type = "Standard_LRS"
+  }
+  os_profile {
+    computer_name  = "${var.prefix}-DC1"
+    admin_username = var.local_admin_username
+    admin_password = var.local_admin_password
+  }
+
+  os_profile_windows_config {
+    provision_vm_agent        = true
+    enable_automatic_upgrades = true
+  }
+
+  tags = {
+    environment = var.prod
+    source      = var.sourcedeployment
+  }
+}
+
+/**
 # ------------------------------------------------------------
 # 5) AVD Host Pool
 # ------------------------------------------------------------
@@ -46,8 +117,8 @@ resource "azurerm_virtual_desktop_host_pool" "hostpool" {
   name                 = "${var.prefix}-hostpool"
   location             = azurerm_resource_group.rg.location
   resource_group_name  = azurerm_resource_group.rg.name
-  type                 = "Pooled"                # or "Personal"
-  load_balancer_type   = "BreadthFirst"          # Possible: "BreadthFirst", "DepthFirst", "Persistent"
+  type                 = "Pooled"       # or "Personal"
+  load_balancer_type   = "BreadthFirst" # Possible: "BreadthFirst", "DepthFirst", "Persistent"
   friendly_name        = "${var.prefix} Host Pool"
   validate_environment = true
 
@@ -66,7 +137,7 @@ resource "azurerm_virtual_desktop_application_group" "dag" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   host_pool_id        = azurerm_virtual_desktop_host_pool.hostpool.id
-  type                = "Desktop"         # or "RemoteApp"
+  type                = "Desktop" # or "RemoteApp"
   friendly_name       = "${var.prefix} Application Group"
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_application_group
@@ -93,7 +164,7 @@ resource "azurerm_virtual_desktop_workspace_application_group_association" "asso
 # ------------------------------------------------------------
 resource "azurerm_virtual_desktop_host_pool_registration_info" "registrationinfo" {
   hostpool_id     = azurerm_virtual_desktop_host_pool.hostpool.id
-  expiration_date = var.registration_expiration  # e.g. "2025-12-01T00:00:00Z"
+  expiration_date = var.registration_expiration # e.g. "2025-12-01T00:00:00Z"
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_desktop_host_pool_registration_info
 
@@ -118,10 +189,17 @@ resource "azurerm_network_interface" "avd_vm_nic" {
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
 
+  # Set your preferred DNS servers here
+  dns_servers = [
+    "192.168.10.10"
+  ]
+
   ip_configuration {
     name                          = "nic${count.index + 1}_config"
     subnet_id                     = azurerm_subnet.subnet.id
-    private_ip_address_allocation = "Dynamic"
+    #private_ip_address_allocation = "Dynamic"
+    private_ip_address_allocation = "Static" # Make it Static and pick 192.168.10.20 + count.index
+    private_ip_address            = "192.168.10.${20 + count.index}"
   }
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_interface
@@ -148,13 +226,16 @@ resource "azurerm_windows_virtual_machine" "avd_vm" {
     storage_account_type = "Premium_LRS"
   }
 
-source_image_reference {
-  publisher = "MicrosoftWindowsDesktop"
-  offer     = "windows-11" #"Windows-10"
-  sku       = "win11-21h2-avd" #"20h2-evd"
-  version   = "latest"
-}
-
+  source_image_reference {
+    publisher = "MicrosoftWindowsDesktop"
+    offer     = "windows-11"     #"Windows-10"
+    sku       = "win11-21h2-avd" #"20h2-evd"
+    version   = "latest"
+  }
+  tags = {
+    environment = var.prod
+    source      = var.sourcedeployment
+  }
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/windows_virtual_machine
 
@@ -162,12 +243,12 @@ source_image_reference {
 # 12) VM Extension: Domain Join
 # ------------------------------------------------------------
 resource "azurerm_virtual_machine_extension" "domain_join" {
-  count                = var.rdsh_count
-  name                 = "${var.prefix}-${count.index + 1}-domainJoin"
-  virtual_machine_id   = azurerm_windows_virtual_machine.avd_vm[count.index].id
-  publisher            = "Microsoft.Compute"
-  type                 = "JsonADDomainExtension"
-  type_handler_version = "1.3"
+  count                      = var.rdsh_count
+  name                       = "${var.prefix}-${count.index + 1}-domainJoin"
+  virtual_machine_id         = azurerm_windows_virtual_machine.avd_vm[count.index].id
+  publisher                  = "Microsoft.Compute"
+  type                       = "JsonADDomainExtension"
+  type_handler_version       = "1.3"
   auto_upgrade_minor_version = true
 
   settings = <<-SETTINGS
@@ -192,12 +273,12 @@ resource "azurerm_virtual_machine_extension" "domain_join" {
 # 13) VM Extension: DSC for AVD Registration
 # ------------------------------------------------------------
 resource "azurerm_virtual_machine_extension" "vmext_dsc" {
-  count                = var.rdsh_count
-  name                 = "${var.prefix}-${count.index + 1}-avd_dsc"
-  virtual_machine_id   = azurerm_windows_virtual_machine.avd_vm[count.index].id
-  publisher            = "Microsoft.Powershell"
-  type                 = "DSC"
-  type_handler_version = "2.73"
+  count                      = var.rdsh_count
+  name                       = "${var.prefix}-${count.index + 1}-avd_dsc"
+  virtual_machine_id         = azurerm_windows_virtual_machine.avd_vm[count.index].id
+  publisher                  = "Microsoft.Powershell"
+  type                       = "DSC"
+  type_handler_version       = "2.73"
   auto_upgrade_minor_version = true
 
   settings = <<-SETTINGS
@@ -225,13 +306,15 @@ resource "azurerm_virtual_machine_extension" "vmext_dsc" {
 # 14) Storage Account + File Shares for FSLogix/MSIX
 # ------------------------------------------------------------
 resource "azurerm_storage_account" "avd_storage" {
-  name                     = "${var.prefix}storage"  # Storage account names must be lowercase and 3-24 chars
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = azurerm_resource_group.rg.location
-  account_tier             = "Premium"
-  account_replication_type = "LRS"
-  account_kind             = "FileStorage"
+  name                      = "${lower(replace(var.prefix, "-", ""))}storage" # Storage account names must be lowercase and 3-24 chars
+  resource_group_name       = azurerm_resource_group.rg.name
+  location                  = azurerm_resource_group.rg.location
+  account_tier              = "Premium"
+  account_replication_type  = "LRS"
+  account_kind              = "FileStorage"
   enable_https_traffic_only = true
+  # updated in AzureRM v4+: use this instead of enable_https_traffic_only
+  #https_traffic_only_enabled = true
 }
 # Docs: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account
 
@@ -261,10 +344,12 @@ resource "azuread_group" "avd_users" {
   display_name     = "AVDUsers"
   security_enabled = true
 }
+**/
 
 # ------------------------------------------------------------
 # 16) Role Definitions & Assignments
 # ------------------------------------------------------------
+/**
 data "azurerm_role_definition" "desktop_virtualization_user" {
   name = "Desktop Virtualization User"
 }
@@ -286,7 +371,7 @@ resource "azurerm_role_assignment" "avd_admins_assignment" {
   role_definition_id = data.azurerm_role_definition.desktop_virtualization_admin.id
   principal_id       = azuread_group.avd_admins.id
 }
-
+**/
 # ------------------------------------------------------------
 # 17) AVD Scaling Plan
 # ------------------------------------------------------------

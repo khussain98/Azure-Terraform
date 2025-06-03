@@ -1,17 +1,27 @@
 #-- Azure Variables
+variable "prefix" {
+  default     = "khlab"
+  description = "Prefix for resource naming"
+}
+
 variable "resource_group_location" {
   default     = "uksouth"
   description = "Azure region for deployment"
 }
 
-variable "rg" {
-  default     = "UK-LDN-Servers-AVD"
+variable "rg_vnet" {
+  default     = "UK-LDN-vNet"
   description = "Name of the resource group"
 }
 
-variable "prefix" {
-  default     = "khlab-avd"
-  description = "Prefix for resource naming"
+variable "rg_servers" {
+  default     = "UK-LDN-Servers"
+  description = "Name of the resource group"
+}
+
+variable "rg" {
+  default     = "UK-LDN-Servers-AVD"
+  description = "Name of the resource group"
 }
 
 variable "rdsh_count" {
@@ -50,11 +60,28 @@ variable "domain_password" {
 }
 
 variable "ou_path" {
-  default = ""
+  default = "OU=Citrix Desktops,OU=Servers,OU=Computers,OU=AE,DC=SOLUTIONS,DC=COM"
 }
 
 #-- Other Variables
 variable "registration_expiration" {
   default     = "2025-12-31T23:59:59Z"
   description = "Host pool registration token expiry in RFC3339 format"
+}
+
+variable "prod" {
+  type        = string
+  default     = "prod"
+  description = "Prod Environment"
+}
+
+variable "dev" {
+  type        = string
+  default     = "dev"
+  description = "Dev Environment"
+}
+
+variable "sourcedeployment" {
+  type    = string
+  default = "Terraform"
 }
