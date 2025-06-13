@@ -21,6 +21,10 @@ Open Explorer, choose Terraform folder.
 Create main.tf
 Create var.tf
 
+git config --global user.name "Kamran H."
+git config --global user.email "email"
+git commit --allow-empty -m "first commit"
+
 # Resources: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_machine
 Other useful resources:
 https://learn.microsoft.com/en-us/azure/virtual-machines/windows/cli-ps-findimage
